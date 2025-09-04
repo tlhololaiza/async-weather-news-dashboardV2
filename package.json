@@ -4,14 +4,15 @@
   "description": "My Second NodeJS challenge with CodeTribe",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "callback": "ts-node src/callbackVersion.ts"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tlhololaiza/async-weather-news-dashboardV2.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "tlhololaiza",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/tlhololaiza/async-weather-news-dashboardV2/issues"
