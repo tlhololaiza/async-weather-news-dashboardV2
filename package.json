@@ -1,0 +1,28 @@
+{
+  "name": "async-weather-news-dashboardv2",
+  "version": "1.0.0",
+  "description": "My Second NodeJS challenge with CodeTribe",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tlhololaiza/async-weather-news-dashboardV2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tlhololaiza/async-weather-news-dashboardV2/issues"
+  },
+  "homepage": "https://github.com/tlhololaiza/async-weather-news-dashboardV2#readme",
+  "dependencies": {
+    "@types/node": "^24.3.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
