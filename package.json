@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "callback": "ts-node src/callbackVersion.ts"
+    "callback": "ts-node src/callbackVersion.ts",
+    "promise": "npx ts-node src/promiseVersion.ts"
   },
   "repository": {
     "type": "git",
