@@ -1,4 +1,5 @@
 import * as https from 'https';
+import * as http from 'http';
 
 interface WeatherData {
     temperature: number;
@@ -18,15 +19,51 @@ interface NewsResponse {
     posts: NewsPost[];
 }
 
+interface LocationData {
+    city: string;
+    country: string;
+    countryCode: string;
+}
+
 const OPENWEATHER_API_KEY = 'fb9bce8c66477a7ff08ebcc24bfd43f6';
-const CITY = 'Pretoria';
-const COUNTRY_CODE = 'za';
-const WEATHER_API_URL = `https://api.openweathermap.org/data/2.5/weather?q=${CITY},${COUNTRY_CODE}&appid=${OPENWEATHER_API_KEY}&units=metric`;
 const NEWS_API_URL = 'https://dummyjson.com/posts';
+const GEOLOCATION_API_URL = 'https://ipapi.co/json/';
+
+
+// Function to fetch current location
+async function fetchCurrentLocation(): Promise<LocationData> {
+    return new Promise((resolve, reject) => {
+        https.get(GEOLOCATION_API_URL, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsedData = JSON.parse(data);
+                    if (parsedData.city && parsedData.country_code) {
+                        const location: LocationData = {
+                            city: parsedData.city,
+                            country: parsedData.country_name || parsedData.country,
+                            countryCode: parsedData.country_code.toLowerCase(),
+                        };
+                        resolve(location);
+                    } else {
+                        reject(new Error('Location data not found in response.'));
+                    }
+                } catch (error) {
+                    reject(new Error(`Failed to parse location data: ${(error as Error).message}`));
+                }
+            });
+        }).on('error', (error) => {
+            reject(new Error(`Failed to fetch location data: ${(error as Error).message}`));
+        });
+    });
+}
 
 
 // Function to fetch weather data
-async function fetchWeather(): Promise<WeatherData> {
+async function fetchWeather(city: string, countryCode: string): Promise<WeatherData> {
+    const WEATHER_API_URL = `https://api.openweathermap.org/data/2.5/weather?q=${city},${countryCode}&appid=${OPENWEATHER_API_KEY}&units=metric`;
+    
     return new Promise((resolve, reject) => {
         https.get(WEATHER_API_URL, (res) => {
             let data = '';
@@ -81,10 +118,9 @@ async function fetchNews(): Promise<NewsPost[]> {
     });
 }
 
-
-// Display weather information
-function displayWeather(weather: WeatherData): void {
-    console.log(`Weather in: Pretoria, za`);
+// Displayng weather information
+function displayWeather(weather: WeatherData, location: LocationData): void {
+    console.log(`Weather in: ${location.city}, ${location.country}`);
     console.log(`- Temperature: ${weather.temperature}°C`);
     console.log(`- Feels like: ${weather.feelsLike}°C`);
     console.log(`- Condition: ${weather.condition}`);
@@ -94,13 +130,12 @@ function displayWeather(weather: WeatherData): void {
 }
 
 
-// Display news headlines
+// Displaying news headlines
 function displayNews(newsPosts: NewsPost[]): void {
     console.log('Latest News Headlines:');
     newsPosts.forEach(post => console.log(`- ${post.title}`));
     console.log('');
 }
-
 
 // Centralized error handling
 function handleError(error: unknown, context: string): void {
@@ -114,41 +149,85 @@ async function runAsyncAwaitVersion(): Promise<void> {
     console.log('--- Running Async/Await Chain ---');
     console.log('---------------------------------');
     try {
-        const weatherData = await fetchWeather();
-        displayWeather(weatherData);
+        const location = await fetchCurrentLocation();
+        console.log(`Detected location: ${location.city}, ${location.country}`);
+        
+        const weatherData = await fetchWeather(location.city, location.countryCode);
+        displayWeather(weatherData, location);
 
         const newsData = await fetchNews();
         displayNews(newsData);
     } catch (error) {
         handleError(error, 'async/await chain');
+        
+        const fallbackLocation: LocationData = {
+            city: 'Johannesburg',
+            country: 'South Africa',
+            countryCode: 'za'
+        };
+        console.log(`Failed to get dynamic location. Now using fallback: ${fallbackLocation.city}, ${fallbackLocation.country}`);
+
+        try {
+            const weatherData = await fetchWeather(fallbackLocation.city, fallbackLocation.countryCode);
+            displayWeather(weatherData, fallbackLocation);
+            const newsData = await fetchNews();
+            displayNews(newsData);
+        } catch (fallbackError) {
+            handleError(fallbackError, 'fallback weather/news fetch');
+        }
     }
 
     console.log('--- Running Promise.all() with Async/Await ---');
     console.log('----------------------------------------------');
     try {
+        const location = await fetchCurrentLocation();
+        console.log(`Detected location: ${location.city}, ${location.country}`);
+        
         const [weatherData, newsData] = await Promise.all([
-            fetchWeather(),
+            fetchWeather(location.city, location.countryCode),
             fetchNews()
         ]);
         console.log('Both requests completed successfully and simultaneously.');
         console.log('');
-        displayWeather(weatherData);
+        displayWeather(weatherData, location);
         displayNews(newsData);
     } catch (error) {
         handleError(error, 'Promise.all()');
+
+        const fallbackLocation: LocationData = {
+            city: 'Johannesburg',
+            country: 'South Africa',
+            countryCode: 'za'
+        };
+        console.log(`Failed to get dynamic location. Now using fallback: ${fallbackLocation.city}, ${fallbackLocation.country}`);
+
+        try {
+            const [weatherData, newsData] = await Promise.all([
+                fetchWeather(fallbackLocation.city, fallbackLocation.countryCode),
+                fetchNews()
+            ]);
+            console.log('Both requests completed successfully using fallback location.');
+            displayWeather(weatherData, fallbackLocation);
+            displayNews(newsData);
+        } catch (fallbackError) {
+            handleError(fallbackError, 'fallback Promise.all()');
+        }
     }
 
     console.log('--- Running Promise.race() with Async/Await ---');
     console.log('-----------------------------------------------');
     try {
+        const location = await fetchCurrentLocation();
+        console.log(`Detected location: ${location.city}, ${location.country}`);
+        
         const fastestResult = await Promise.race([
-            fetchWeather(),
+            fetchWeather(location.city, location.countryCode),
             fetchNews()
         ]);
         if ('temperature' in fastestResult) {
             console.log('The weather API won the race!');
             console.log('First result to settle:');
-            displayWeather(fastestResult as WeatherData);
+            displayWeather(fastestResult as WeatherData, location);
         } else {
             console.log('The news API won the race!');
             console.log('First result to settle:');
@@ -156,6 +235,30 @@ async function runAsyncAwaitVersion(): Promise<void> {
         }
     } catch (error) {
         handleError(error, 'Promise.race()');
+
+        const fallbackLocation: LocationData = {
+            city: 'Johannesburg',
+            country: 'South Africa',
+            countryCode: 'za'
+        };
+        console.log(`Failed to get dynamic location. Now using fallback: ${fallbackLocation.city}, ${fallbackLocation.country}`);
+
+        try {
+            const fastestResult = await Promise.race([
+                fetchWeather(fallbackLocation.city, fallbackLocation.countryCode),
+                fetchNews()
+            ]);
+            console.log('One of the requests completed successfully using fallback location.');
+            if ('temperature' in fastestResult) {
+                console.log('The weather API won the race!');
+                displayWeather(fastestResult as WeatherData, fallbackLocation);
+            } else {
+                console.log('The news API won the race!');
+                displayNews(fastestResult as NewsPost[]);
+            }
+        } catch (fallbackError) {
+            handleError(fallbackError, 'fallback Promise.race()');
+        }
     }
 }
 

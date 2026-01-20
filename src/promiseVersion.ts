@@ -1,15 +1,26 @@
 import * as https from 'https';
+import * as http from 'http';
 import type { IncomingMessage } from 'http';
+
+interface LocationData {
+  city: string;
+  country: string;
+  countryCode: string;
+}
 
 const OPENWEATHER_API_KEY = 'fb9bce8c66477a7ff08ebcc24bfd43f6';
 const DUMMYJSON_URL = 'https://dummyjson.com/posts';
-const CITY = 'Pretoria';
-const COUNTRY_CODE = 'za';
+
+const GEOLOCATION_APIS = [
+  'http://ip-api.com/json/',
+  'https://ipapi.co/json/',
+];
 
 // Helper function to promisify https.get
 const promisifyHttpsGet = (url: string): Promise<any> => {
   return new Promise((resolve, reject) => {
-    https
+    const client = url.startsWith('https:') ? https : http;
+    client
       .get(url, (res: IncomingMessage) => {
         let data = '';
         res.on('data', (chunk: string | Buffer) => (data += chunk));
@@ -35,9 +46,51 @@ const promisifyHttpsGet = (url: string): Promise<any> => {
   });
 };
 
+// Function to fetch current location
+const fetchCurrentLocation = (): Promise<LocationData> => {
+  const tryGeolocationAPI = async (url: string): Promise<LocationData> => {
+    const parsedData = await promisifyHttpsGet(url);
+    
+    const city = parsedData.city;
+    const country = parsedData.country || parsedData.country_name;
+    const countryCode = parsedData.countryCode || parsedData.country_code;
+
+    if (city && countryCode) {
+      return {
+        city: city,
+        country: country,
+        countryCode: countryCode.toLowerCase(),
+      };
+    } else {
+      throw new Error(`Location data not found in response from ${url}. Available fields: ${Object.keys(parsedData).join(', ')}`);
+    }
+  };
+
+  return new Promise(async (resolve) => {
+    
+    for (const apiUrl of GEOLOCATION_APIS) {
+      try {
+        console.log(`Trying geolocation API: ${apiUrl}`);
+        const location = await tryGeolocationAPI(apiUrl);
+        return resolve(location);
+      } catch (error) {
+        console.log(`API ${apiUrl} failed:`, (error as Error).message);
+        continue;
+      }
+    }
+
+    console.log('All geolocation APIs failed, using default location: Johannesburg, ZA');
+    resolve({
+      city: 'Johannesburg',
+      country: 'South Africa',
+      countryCode: 'za'
+    });
+  });
+};
+
 // Functions that return a Promise
-const fetchWeather = () => {
-  const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${CITY},${COUNTRY_CODE}&appid=${OPENWEATHER_API_KEY}&units=metric`;
+const fetchWeather = (city: string, countryCode: string) => {
+  const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city},${countryCode}&appid=${OPENWEATHER_API_KEY}&units=metric`;
   return promisifyHttpsGet(weatherUrl);
 };
 
@@ -46,8 +99,8 @@ const fetchNews = () => {
 };
 
 // Function to display the results
-const displayResults = (weatherData: any, newsData: any) => {
-  console.log(`\nWeather in: ${CITY}, ${COUNTRY_CODE}`);
+const displayResults = (weatherData: any, newsData: any, location: LocationData) => {
+  console.log(`\nWeather in: ${location.city}, ${location.country}`);
   console.log(`- Temperature: ${weatherData.main.temp}°C`);
   console.log(`- Feels like: ${weatherData.main.feels_like}°C`);
   console.log(`- Condition: ${weatherData.weather[0].description}`);
@@ -61,12 +114,15 @@ const displayResults = (weatherData: any, newsData: any) => {
 
 // --- Promise Chain Example ---
 console.log('--- Running Promise Chain ---');
-fetchWeather()
-  .then((weatherData) => {
-    return fetchNews().then((newsData) => ({ weatherData, newsData }));
+fetchCurrentLocation()
+  .then((location) => {
+    console.log(`Detected location: ${location.city}, ${location.country}`);
+    return fetchWeather(location.city, location.countryCode).then((weatherData) => 
+      fetchNews().then((newsData) => ({ weatherData, newsData, location }))
+    );
   })
-  .then(({ weatherData, newsData }) => {
-    displayResults(weatherData, newsData);
+  .then(({ weatherData, newsData, location }) => {
+    displayResults(weatherData, newsData, location);
   })
   .catch((error) => {
     console.error(`Error in Promise Chain: ${error.message}`);
@@ -75,10 +131,15 @@ console.log('-----------------------------\n');
 
 // --- Promise.all() Example ---
 console.log('--- Running Promise.all() ---');
-Promise.all([fetchWeather(), fetchNews()])
-  .then(([weatherData, newsData]) => {
+fetchCurrentLocation()
+  .then((location) => {
+    console.log(`Detected location: ${location.city}, ${location.country}`);
+    return Promise.all([fetchWeather(location.city, location.countryCode), fetchNews()])
+      .then(([weatherData, newsData]) => ({ weatherData, newsData, location }));
+  })
+  .then(({ weatherData, newsData, location }) => {
     console.log('Both requests completed successfully and simultaneously.');
-    displayResults(weatherData, newsData);
+    displayResults(weatherData, newsData, location);
   })
   .catch((error) => {
     console.error(`Error in Promise.all(): ${error.message}`);
@@ -87,8 +148,13 @@ console.log('------------------------------\n');
 
 // --- Promise.race() ---
 console.log('--- Running Promise.race() ---');
-Promise.race([fetchWeather(), fetchNews()])
-  .then((result) => {
+fetchCurrentLocation()
+  .then((location) => {
+    console.log(`Detected location: ${location.city}, ${location.country}`);
+    return Promise.race([fetchWeather(location.city, location.countryCode), fetchNews()])
+      .then((result) => ({ result, location }));
+  })
+  .then(({ result, location }) => {
     if (result.posts) {
       console.log('The news API won the race!');
     } else {
