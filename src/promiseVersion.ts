@@ -48,44 +48,46 @@ const promisifyHttpsGet = (url: string): Promise<any> => {
 
 // Function to fetch current location
 const fetchCurrentLocation = (): Promise<LocationData> => {
-  const tryGeolocationAPI = async (url: string): Promise<LocationData> => {
-    const parsedData = await promisifyHttpsGet(url);
-    
-    const city = parsedData.city;
-    const country = parsedData.country || parsedData.country_name;
-    const countryCode = parsedData.countryCode || parsedData.country_code;
+  const tryGeolocationAPI = (url: string): Promise<LocationData> => {
+    return promisifyHttpsGet(url).then((parsedData) => {
+      const city = parsedData.city;
+      const country = parsedData.country || parsedData.country_name;
+      const countryCode = parsedData.countryCode || parsedData.country_code;
 
-    if (city && countryCode) {
-      return {
-        city: city,
-        country: country,
-        countryCode: countryCode.toLowerCase(),
-      };
-    } else {
-      throw new Error(`Location data not found in response from ${url}. Available fields: ${Object.keys(parsedData).join(', ')}`);
-    }
+      if (city && countryCode) {
+        return {
+          city: city,
+          country: country,
+          countryCode: countryCode.toLowerCase(),
+        };
+      } else {
+        throw new Error(`Location data not found in response from ${url}. Available fields: ${Object.keys(parsedData).join(', ')}`);
+      }
+    });
   };
 
-  return new Promise(async (resolve) => {
-    
-    for (const apiUrl of GEOLOCATION_APIS) {
-      try {
-        console.log(`Trying geolocation API: ${apiUrl}`);
-        const location = await tryGeolocationAPI(apiUrl);
-        return resolve(location);
-      } catch (error) {
-        console.log(`API ${apiUrl} failed:`, (error as Error).message);
-        continue;
-      }
+  const tryAPIs = (index: number): Promise<LocationData> => {
+    if (index >= GEOLOCATION_APIS.length) {
+      console.log('All geolocation APIs failed, using default location: Johannesburg, ZA');
+      return Promise.resolve({
+        city: 'Johannesburg',
+        country: 'South Africa',
+        countryCode: 'za'
+      });
     }
 
-    console.log('All geolocation APIs failed, using default location: Johannesburg, ZA');
-    resolve({
-      city: 'Johannesburg',
-      country: 'South Africa',
-      countryCode: 'za'
-    });
-  });
+    const apiUrl = GEOLOCATION_APIS[index];
+    console.log(`Trying geolocation API: ${apiUrl}`);
+    
+    return tryGeolocationAPI(apiUrl)
+      .then((location) => location)
+      .catch((error) => {
+        console.log(`API ${apiUrl} failed:`, (error as Error).message);
+        return tryAPIs(index + 1);
+      });
+  };
+
+  return tryAPIs(0);
 };
 
 // Functions that return a Promise

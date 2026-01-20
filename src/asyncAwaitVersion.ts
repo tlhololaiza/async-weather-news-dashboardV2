@@ -1,6 +1,8 @@
 import * as https from 'https';
 import * as http from 'http';
 
+
+
 interface WeatherData {
     temperature: number;
     feelsLike: number;
@@ -27,27 +29,45 @@ interface LocationData {
 
 const OPENWEATHER_API_KEY = 'fb9bce8c66477a7ff08ebcc24bfd43f6';
 const NEWS_API_URL = 'https://dummyjson.com/posts';
-const GEOLOCATION_API_URL = 'https://ipapi.co/json/';
 
+const GEOLOCATION_APIS = [
+    'http://ip-api.com/json/',
+    'https://ipapi.co/json/',
+];
 
-// Function to fetch current location
-async function fetchCurrentLocation(): Promise<LocationData> {
+// Helper function to try a single geolocation API
+async function tryGeolocationAPI(apiUrl: string): Promise<LocationData> {
     return new Promise((resolve, reject) => {
-        https.get(GEOLOCATION_API_URL, (res) => {
+        const client = apiUrl.startsWith('https:') ? https : http;
+        
+        client.get(apiUrl, (res) => {
             let data = '';
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => {
                 try {
                     const parsedData = JSON.parse(data);
-                    if (parsedData.city && parsedData.country_code) {
-                        const location: LocationData = {
+                    
+                    let location: LocationData | null = null;
+                    
+                    // Handle different API response formats
+                    if (parsedData.city && parsedData.countryCode) {
+                        location = {
+                            city: parsedData.city,
+                            country: parsedData.country,
+                            countryCode: parsedData.countryCode.toLowerCase(),
+                        };
+                    } else if (parsedData.city && parsedData.country_code) {
+                        location = {
                             city: parsedData.city,
                             country: parsedData.country_name || parsedData.country,
                             countryCode: parsedData.country_code.toLowerCase(),
                         };
+                    }
+                    
+                    if (location) {
                         resolve(location);
                     } else {
-                        reject(new Error('Location data not found in response.'));
+                        reject(new Error(`Location data not found in response from ${apiUrl}`));
                     }
                 } catch (error) {
                     reject(new Error(`Failed to parse location data: ${(error as Error).message}`));
@@ -57,6 +77,28 @@ async function fetchCurrentLocation(): Promise<LocationData> {
             reject(new Error(`Failed to fetch location data: ${(error as Error).message}`));
         });
     });
+}
+
+// Function to fetch current location (tries multiple APIs)
+async function fetchCurrentLocation(): Promise<LocationData> {
+    for (const apiUrl of GEOLOCATION_APIS) {
+        try {
+            console.log(`Trying geolocation API: ${apiUrl}`);
+            const location = await tryGeolocationAPI(apiUrl);
+            return location;
+        } catch (error) {
+            console.log(`API ${apiUrl} failed:`, (error as Error).message);
+            continue;
+        }
+    }
+    
+    // If all APIs fail, use default location
+    console.log('All geolocation APIs failed, using default location: Johannesburg, ZA');
+    return {
+        city: 'Johannesburg',
+        country: 'South Africa',
+        countryCode: 'za'
+    };
 }
 
 
